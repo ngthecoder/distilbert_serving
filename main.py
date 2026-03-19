@@ -23,8 +23,3 @@ def analyze(req: AnalyzeRequest):
 
 if __name__ == "__main__":
     uvicorn.run('main:app', host='0.0.0.0', port=8080)
-
-
-curl -X POST "http://localhost:8080/analyze" \
-  -H "Content-Type: application/json" \
-  -d '{"text": "This is absolutely amazing!"}'

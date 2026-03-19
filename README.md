@@ -20,8 +20,14 @@ distilbert_serving/
 - Docker
 - Minikube
 
-## Commands
+### Commands
 ```bash
-docker built -t distilbert_serving .
-docker run distilbert_serving
+docker compose up --build
+```
+
+### Teseting
+```bash
+curl -X POST "http://localhost:8080/analyze" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "This is absolutely amazing!"}'
 ```
