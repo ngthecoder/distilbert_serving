@@ -1,4 +1,5 @@
 # DistilBERT Serving with Kubernetes
+Serving DistilBERT sentiment analysis API with FastAPI and Docker.
 
 ## Tech Stack
 - LLM: DistilBERT
