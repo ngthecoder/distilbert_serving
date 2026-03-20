@@ -13,6 +13,12 @@ distilbert_classifier = pipeline(
 class AnalyzeRequest(BaseModel):
     text: str
 
+@app.get("/ping")
+def test():
+    return {
+        'text': "pong"
+    }
+
 @app.post("/analyze")
 def analyze(req: AnalyzeRequest):
     result = distilbert_classifier(req.text)

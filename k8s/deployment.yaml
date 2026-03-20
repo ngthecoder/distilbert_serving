@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: distilbert-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: distilbert-app
+  template:
+    metadata:
+      labels:
+        app: distilbert-app
+    spec:
+      containers:
+        - name: distilbert-app-containers
+          image: distilbert_api:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+            requests:
+              memory: "1Gi"
+              cpu: "200m"
