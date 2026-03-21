@@ -8,6 +8,63 @@ When using docker compose, we did not need to pre-download the image but the mod
 ### Pod Resource Limiting
 The inference takes so much processing power so when we have multiple pods running, we need to limit resources each pod is allowed to use otherwise the machine would run out of resources that crash the whole cluster. To avoid it, for the request resource, I set the 1 Gigabyte of memory & 200 millicore of CPU and for the limit resource, I set the 1 Gigabyte of memory & 500 millicore of CPU. The request resource indicates the guaranteed resources a pod can use and the limit resource dictates the maximum resources.
 
+### Updating Pod Resource Limiting
+When the pods are idle meaning just waiting for requests, they use this much resource:
+```bash
+kubectl top pods
+
+NAME                                     CPU(cores)   MEMORY(bytes)   
+distilbert-deployment-6f6cc57777-4kf7k   2m           279Mi           
+distilbert-deployment-6f6cc57777-ckqgd   3m           273Mi           
+distilbert-deployment-6f6cc57777-nj8ml   2m           375Mi    
+```
+
+And I watched how they bump when I make frequent requests against /analyze endpoint.
+
+I ran this command to continuously monitor the resource:
+```bash
+watch -n 1 kubectl top pods
+```
+
+I ran this command to make 20 /analyze requests consecutively:
+```bash
+for i in {1..20}; do curl -s -X POST "http://127.0.0.1:57001/analyze" -H "Content-Type: application/json" -d '{"text": "This is absolutely amazing!"}' ; done
+```
+
+The resource usage at the peak:
+```bash
+Every 1.0s: kubectl top pods
+
+NAME                                     CPU(cores)   MEMORY(bytes)
+distilbert-deployment-6f6cc57777-4kf7k   146m         279Mi
+distilbert-deployment-6f6cc57777-ckqgd   295m         276Mi
+distilbert-deployment-6f6cc57777-nj8ml   116m         375Mi
+```
+
+So when idle, each pod uses about 3 millicore of CPU and 300 Megabytes of memory and at the peak, it uses 295 millicore of CPU and 400 Megabytes of memory. I updated the resource limits in `deployment.yaml` based on this information.
+
+Previous Resource Limit:
+```yaml
+resources:
+    limits:
+        memory: "1Gi"
+        cpu: "500m"
+    requests:
+        memory: "1Gi"
+        cpu: "200m"
+```
+
+Updated Resource Limit:
+```yaml
+resources:
+    limits:
+        memory: "500Mi"
+        cpu: "500m"
+    requests:
+        memory: "500Mi"
+        cpu: "50m"
+```
+
 ### Difference between LivenessProbe and ReadinessProbe
 LivenessProbe checks if a pod is alive meaning not crashed and ReadinessProbe checks if a pod is ready to serve the application. In the last project ([movie_ticketing](https://github.com/ngthecoder/movie_ticketing)), I used /ping for LivenessProbe and /movies for Readiness because we wanted to check if the database connection is established before labeling the pod as ready. But, I used /ping for both in this project and there are 3 reasons for that. The 1st reason is that pipeline() is executed at the module level in main.py, meaning the model is fully loaded before uvicorn starts accepting any requests. So if /ping responds, the model is guaranteed to be ready. The 2nd reason is that we can only use GET request for LivenessProbe or ReadinessProbe so we cannot even use /analyze for any check. The 3rd reason is that even if we were able to use POST request for readiness, frequent /analyze request (every 15 seconds as defined in `deployment.yaml`) will surely put a strain on the compute resources.
 
