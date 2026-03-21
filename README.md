@@ -191,7 +191,9 @@ When resources/limit/cpu = 400m (millicore):
 Average time: 2.4040909 seconds (python3 -c "times=[4.150546, 1.329997, 0.866239, 2.788253, 0.975224, 5.406327, 1.453371, 3.187058, 3.119381, 0.764513]; average=sum(times)/len(times); print(average)")
 ```
 
-### Results Table and Conclusion
+### Results and Conclusion
+![Latencies under Different CPU Limits](./cpu_latency_graph.png)
+
 | CPU Limit (Millicore) | Response Time (Seconds) |
 | --------------------- | ----------------------- |
 | 100 | 14.4792746 |
