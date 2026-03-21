@@ -3,7 +3,7 @@ Serving DistilBERT sentiment analysis API with FastAPI, Docker, and Kubernetes.
 
 ## Lessons Learned
 ### Model Pre-download
-When using docker compose, we did not need to pre-download the image but the model was downloaded once and cached by Docker. However with Minikube, we had to pre-download the model because we cannot tolerate the pods downloading the model from HuggingFace everytime they go down. The drawback of pre-downloading is that it takes much longer to build the image but it is much more beneficial for the cluster to get the pods working as soon as old ones crash.
+When using docker compose, we did not need to pre-download the model but the model was downloaded once and cached by Docker. However with Minikube, we had to pre-download the model because we cannot tolerate the pods downloading the model from HuggingFace everytime they go down. The drawback of pre-downloading is that it takes much longer to build the image but it is much more beneficial for the cluster to get the pods working as soon as old ones crash.
 
 ### Pod Resource Limiting
 The inference takes so much processing power so when we have multiple pods running, we need to limit resources each pod is allowed to use otherwise the machine would run out of resources that crash the whole cluster. To avoid it, for the request resource, I set the 1 Gigabyte of memory & 200 millicore of CPU and for the limit resource, I set the 1 Gigabyte of memory & 500 millicore of CPU. The request resource indicates the guaranteed resources a pod can use and the limit resource dictates the maximum resources.
@@ -74,12 +74,15 @@ Without imagePullPolicy: Never in Deployment, Kubernetes tries to pull the image
 ## Investigating the Relationship between CPU Resource Limit and Response Time
 I wanted to know how strong the correlation is between the response time and CPU resource limit so I measured the response time by changing the resource limit and taking the average latency of multiple /analyze responses.
 
-Curl Command with -w (Writ-out) flag:
+Curl Command with -w (Write-out) flag:
 ```bash
 curl -w "\nOperation lasted: %{time_total} seconds" -X POST "http://127.0.0.1:60579/analyze" \
   -H "Content-Type: application/json" \
   -d '{"text": "This is absolutely amazing!"}'
 ```
+
+### Trouble in Measuring under 100m Limit
+When measuring the response time with the CPU limit of 100m, the pods were taking forever to get ready and sometimes they even fell to Not Ready from Ready. I was not sure why, since it had been working fine with 500m. But after a while, I realized that 100m of CPU limit was insufficient to load the model so the uvicorn server could not start within the Liveness/ReadinessProbe initialDelaySeconds. So in response to this, I adjusted the initialDelaySeconds from 15 seconds to 30 seconds and the pods started working again.
 
 ### 3 Replica with 5 Measurements
 When resources/limit/cpu = 100m (millicore):
@@ -203,7 +206,7 @@ In conclusion, we can say that as the limit increases, the response time shorten
 
 Before explaining why the rate of change got small, we need to know about CPU throttling. With full access to CPU, a process can use CPU core for the full cycle (100 milliseconds) but with 300 millicore limit, the process can only use CPU core for 30 milliseconds and it needs to wait doing nothing for 70 milliseconds. So if the process with 300 millicore limit wants to do the same thing as it did with no limit, it requires 4 cycles (30ms of working & 70ms of waiting -> 30ms of working & 70ms of waiting -> 30ms of working & 70ms of waiting -> 10ms of working).
 
-When we had low CPU limit, the process had to wait for multiple cycles to complete the operation so it was really slow but as the limit increases, the process can complete the operation in the same or similar number of cycles so it just becomes dependent on how fast the model can run inference. That's why the response time doesn't get significantly faster once it passes 300m limit.
+Once the CPU limit is high enough to complete the inference in a single or similar number of cycles, the bottleneck shifts from CPU throttling to the model's own computation time. That's why the gains become smaller beyond 300m.
 
 ## Tech Stack
 - Model: DistilBERT
