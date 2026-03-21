@@ -71,8 +71,142 @@ LivenessProbe checks if a pod is alive meaning not crashed and ReadinessProbe ch
 ### imagePullPolicy
 Without imagePullPolicy: Never in Deployment, Kubernetes tries to pull the image from DockerHub but since we build the image locally, we should set imagePullPolicy to Never to tell Kubernetes the image is built locally.
 
+## Investigating the Relationship between CPU Resource Limit and Response Time
+I wanted to know how strong the correlation is between the response time and CPU resource limit so I measured the response time by changing the resource limit and taking the average latency of multiple /analyze responses.
+
+Curl Command with -w (Writ-out) flag:
+```bash
+curl -w "\nOperation lasted: %{time_total} seconds" -X POST "http://127.0.0.1:60579/analyze" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "This is absolutely amazing!"}'
+```
+
+### 3 Replica with 5 Measurements
+When resources/limit/cpu = 100m (millicore):
+```
+1st time: 17.989952 seconds
+2nd time: 27.100116 seconds
+3rd time: 22.431852 seconds
+4th time: 12.798270 seconds
+5th time: 19.589428 seconds
+Average time: 19.9819236 seconds (python3 -c "times=[17.989952, 27.100116, 22.431852, 12.798270, 19.589428]; average=sum(times)/len(times); print(average)")
+```
+
+When resources/limit/cpu = 200m (millicore):
+```
+1st time: 6.325544 seconds
+2nd time: 12.331928 seconds
+3rd time: 2.522913 seconds
+4th time: 11.090575 seconds
+5th time: 2.446036 seconds
+Average time: 6.9433992 seconds (python3 -c "times=[6.325544, 12.331928, 2.522913, 11.090575, 2.446036]; average=sum(times)/len(times); print(average)")
+```
+
+### 1 Replica with 5 Measurements
+I noticed that the time varies significantly among those 5 times and I figured that the requests are load balanced between 3 replicas. For accurate testing, I set replicas:1 and re-tested.
+
+When resources/limit/cpu = 100m (millicore):
+```
+1st time: 24.158747 seconds
+2nd time: 4.755142 seconds
+3rd time: 23.202797 seconds
+4th time: 6.195886 seconds
+5th time: 14.083801 seconds
+Average time: 14.4792746 seconds (python3 -c "times=[24.158747, 4.755142, 23.202797, 6.195886, 14.083801]; average=sum(times)/len(times); print(average)")
+```
+
+When resources/limit/cpu = 200m (millicore):
+```
+1st time: 9.677102 seconds
+2nd time: 9.325476 seconds
+3rd time: 3.554495 seconds
+4th time: 1.893006 seconds
+5th time: 7.254398 seconds
+Average time: 6.3408954 seconds (python3 -c "times=[9.677102, 9.325476, 3.554495, 1.893006, 7.254398]; average=sum(times)/len(times); print(average)")
+```
+
+When resources/limit/cpu = 300m (millicore):
+```
+1st time: 9.050799 seconds
+2nd time: 2.586199 seconds
+3rd time: 4.502776 seconds
+4th time: 0.298613 seconds
+5th time: 3.602089 seconds
+Average time: 4.0080952 seconds (python3 -c "times=[9.050799, 2.586199, 4.502776, 0.298613, 3.602089]; average=sum(times)/len(times); print(average)")
+```
+
+When resources/limit/cpu = 400m (millicore):
+```
+1st time: 7.934045 seconds
+2nd time: 7.821140 seconds
+3rd time: 0.679779 seconds
+4th time: 0.893427 seconds
+5th time: 7.957631 seconds
+Average time: 5.0572044 seconds (python3 -c "times=[7.934045, 7.821140, 0.679779, 0.893427, 7.957631]; average=sum(times)/len(times); print(average)")
+```
+
+When resources/limit/cpu = 500m (millicore):
+```
+1st time: 6.301705 seconds
+2nd time: 0.284281 seconds
+3rd time: 0.496677 seconds
+4th time: 1.929600 seconds
+5th time: 0.896461 seconds
+Average time: 1.9817448 seconds (python3 -c "times=[6.301705, 0.284281, 0.496677, 1.929600, 0.896461]; average=sum(times)/len(times); print(average)")
+```
+
+### 1 Replica with 10 Measurements for 300m and 400m
+The average time shows decreasing trend as I increased the limit but there is anomaly between CPU=300m and 400m. So I decided to take time 10 times instead of 5 for those two limits.
+
+When resources/limit/cpu = 300m (millicore):
+```
+1st time: 6.895056 seconds
+2nd time: 0.700627 seconds
+3rd time: 2.877908 seconds
+4th time: 3.571861 seconds
+5th time: 0.866828 seconds
+6th time: 1.671221 seconds
+7th time: 4.475670 seconds
+8th time: 1.956510 seconds
+9th time: 2.258433 seconds
+10th time: 1.815006 seconds
+Average time: 2.708912 seconds (python3 -c "times=[6.895056, 0.700627, 2.877908, 3.571861, 0.866828, 1.671221, 4.475670, 1.956510, 2.258433, 1.815006]; average=sum(times)/len(times); print(average)")
+```
+
+When resources/limit/cpu = 400m (millicore):
+```
+1st time: 4.150546 seconds
+2nd time: 1.329997 seconds
+3rd time: 0.866239 seconds
+4th time: 2.788253 seconds
+5th time: 0.975224 seconds
+6th time: 5.406327 seconds
+7th time: 1.453371 seconds
+8th time: 3.187058 seconds
+9th time: 3.119381 seconds
+10th time: 0.764513 seconds
+Average time: 2.4040909 seconds (python3 -c "times=[4.150546, 1.329997, 0.866239, 2.788253, 0.975224, 5.406327, 1.453371, 3.187058, 3.119381, 0.764513]; average=sum(times)/len(times); print(average)")
+```
+
+### Results Table and Conclusion
+| CPU Limit (Millicore) | Response Time (Seconds) |
+| --------------------- | ----------------------- |
+| 100 | 14.4792746 |
+| 200 | 6.3408954 |
+| 300 | 2.708912 |
+| 400 | 2.4040909 |
+| 500 | 1.9817448 |
+
+\* For 300 and 400 Millicore, I used the average of 10 measurements while for others, I used the average of 5.
+
+In conclusion, we can say that as the limit increases, the response time shortens. However, between 300m and 500m, the rate of change becomes smaller. 
+
+Before explaining why the rate of change got small, we need to know about CPU throttling. With full access to CPU, a process can use CPU core for the full cycle (100 milliseconds) but with 300 millicore limit, the process can only use CPU core for 30 milliseconds and it needs to wait doing nothing for 70 milliseconds. So if the process with 300 millicore limit wants to do the same thing as it did with no limit, it requires 4 cycles (30ms of working & 70ms of waiting -> 30ms of working & 70ms of waiting -> 30ms of working & 70ms of waiting -> 10ms of working).
+
+When we had low CPU limit, the process had to wait for multiple cycles to complete the operation so it was really slow but as the limit increases, the process can complete the operation in the same or similar number of cycles so it just becomes dependent on how fast the model can run inference. That's why the response time doesn't get significantly faster once it passes 300m limit.
+
 ## Tech Stack
-- LLM: DistilBERT
+- Model: DistilBERT
 - Backend: Python, FastAPI, uvicorn
 - Infrastructure: Kubernetes
 
