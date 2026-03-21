@@ -100,6 +100,8 @@ docker compose up --build
 
 #### Testing
 ```bash
+curl -X GET "http://localhost:8080/ping"
+
 curl -X POST "http://localhost:8080/analyze" \
   -H "Content-Type: application/json" \
   -d '{"text": "This is absolutely amazing!"}'
