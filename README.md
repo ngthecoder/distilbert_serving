@@ -213,7 +213,9 @@ Once the CPU limit is high enough to complete the inference in a single or simil
 ## Tech Stack
 - Model: DistilBERT
 - Backend: Python, FastAPI, uvicorn
-- Infrastructure: Kubernetes
+- Infrastructure: Kubernetes, EKS
+
+\* AWS EKS Infrastucture information is in the [eks_infra](./eks_infra) directory.
 
 ## Structure
 ```
