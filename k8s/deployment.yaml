@@ -14,8 +14,8 @@ spec:
     spec:
       containers:
         - name: distilbert-app-containers
-          image: distilbert_api:latest
-          imagePullPolicy: Never
+          image: <account id>.dkr.ecr.us-east-1.amazonaws.com/distilbert-serving-ecr-repo:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
           livenessProbe:
