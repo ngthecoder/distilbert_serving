@@ -55,8 +55,18 @@ kubectl get service distilbert-service
 curl -X POST \
   http://<elb url>.us-east-1.elb.amazonaws.com:8080/analyze \
   -H "Content-Type: application/json" \
-  -d '{"text": "This movie was absolutely fantastic!"}'
+  -d '{"text": "This movie was absolutely fantastic!"}
 ```
+
+## Teardown
+```bash
+# 1. Delete Kubernetes resources first (removes ELB)
+kubectl delete -f k8s/
+
+# 2. Destroy infrastructure
+terraform destroy
+```
+Skipping step 1 will cause VPC deletion to fail due to ELB dependency.
 
 ## Change in Deployment for AWS
 ### `deployment.yaml`
