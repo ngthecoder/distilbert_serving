@@ -16,6 +16,8 @@ The goal of this setup is simple: take the local Kubernetes version of the proje
 
 ## Architecture Overview
 
+![Architecture Diagram](./architecture_diagram.png)
+
 The worker nodes run in private subnets, while public-facing traffic enters through an AWS load balancer.
 
 High-level request flow:
