@@ -3,7 +3,7 @@ kind: Service
 metadata:
   name: distilbert-service
 spec:
-  type: NodePort
+  type: LoadBalancer
   selector:
     app: distilbert-app
   ports:
