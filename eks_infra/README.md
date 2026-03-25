@@ -1,24 +1,119 @@
 # EKS Infra for DistilBERT Serving
-Terraform configuration for provisioning an EKS cluster to serve DistilBERT inference workloads on AWS.
 
-## Architecture
-- VPC with public and private subnets across 2 availability zones
-- NAT Gateway for outbound internet access from private subnets
-- EKS Cluster (Kubernetes 1.31)
-- Managed Node Group (t3.medium × 1) deployed in private subnets
-- IAM roles for EKS control plane and worker nodes
+This directory contains the AWS infrastructure and Kubernetes setup for deploying the DistilBERT sentiment analysis API on Amazon EKS.
 
-## Usage
+The goal of this setup is simple: take the local Kubernetes version of the project and run it in AWS with the core pieces needed for a more realistic environment.
+
+## What This Setup Includes
+
+- VPC with public and private subnets across 2 Availability Zones
+- Internet Gateway and NAT Gateway
+- EKS cluster and managed node group
+- ECR repository for the container image
+- Kubernetes `Deployment` and `Service` manifests
+- k6 load testing script
+- Prometheus and Grafana for monitoring
+
+## Architecture Overview
+
+The worker nodes run in private subnets, while public-facing traffic enters through an AWS load balancer.
+
+High-level request flow:
+
+`User -> Load Balancer -> EKS worker node -> Pod`
+
+Image pull / outbound flow:
+
+`Worker node -> NAT Gateway -> Internet / ECR`
+
+This is why the setup needs both:
+- a **LoadBalancer** service, so the app has a stable public endpoint
+- a **NAT Gateway**, so nodes in private subnets can still pull images and reach external services
+
+## Current Configuration
+
+### AWS
+- Region: `us-east-1`
+- VPC CIDR: `10.0.0.0/16`
+- 2 public subnets
+- 2 private subnets
+
+### EKS
+- Cluster authentication mode: API
+- Kubernetes version in Terraform: `1.35`
+- Node group instance type: `t3.medium`
+- Node group size: min=1, max=1, desired=1
+
+### Kubernetes App
+- Replicas: `3`
+- Service type: `LoadBalancer`
+- Resource requests:
+  - CPU: `50m`
+  - Memory: `500Mi`
+- Resource limits:
+  - CPU: `1000m`
+  - Memory: `500Mi`
+
+## Project Files
+
+- `main.tf` - provider and base Terraform configuration
+- `vpc.tf` - VPC, subnets, IGW, NAT Gateway, route tables
+- `eks.tf` - EKS cluster and node group
+- `ecr.tf` - ECR repository
+- `iam.tf` - IAM roles and policy attachments
+- `variables.tf` - input variables
+- `outputs.tf` - useful outputs
+- `deployment.yaml` - Kubernetes deployment
+- `service.yaml` - Kubernetes service
+- `load_test.js` - k6 load test
+
+## Prerequisites
+
+- Terraform
+- AWS CLI
+- kubectl
+- Docker
+- Helm
+- k6
+- An AWS account with permission to create EKS, VPC, IAM, and ECR resources
+
+## 1. Provision the Infrastructure
+
 ```bash
-# Run this once
 terraform init
-
 terraform apply
+```
 
+## 2. Build and Push the Image to ECR
+
+Log in to ECR:
+
+```bash
+aws ecr get-login-password --region us-east-1 | \
+  docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-east-1.amazonaws.com
+```
+
+Build, tag, and push:
+
+```bash
+docker build -t distilbert-serving .
+docker tag distilbert-serving:latest <account-id>.dkr.ecr.us-east-1.amazonaws.com/distilbert-serving-ecr-repo:latest
+docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/distilbert-serving-ecr-repo:latest
+```
+
+## 3. Connect to the EKS Cluster
+
+Update kubeconfig:
+
+```bash
 aws eks update-kubeconfig \
   --region us-east-1 \
   --name distilbert-serving-eks-cluster
+```
 
+If needed, create an access entry for your AWS identity:
+
+```bash
 aws eks create-access-entry \
   --cluster-name distilbert-serving-eks-cluster \
   --principal-arn $(aws sts get-caller-identity --query Arn --output text) \
@@ -30,83 +125,78 @@ aws eks associate-access-policy \
   --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy \
   --access-scope type=cluster \
   --region us-east-1
-
-aws ecr get-login-password --region us-east-1 | \
-  docker login --username AWS --password-stdin \
-  <account id>.dkr.ecr.us-east-1.amazonaws.com
-
-# Execute the following in the roor directory
-docker build -t distilbert-serving .
-
-docker tag distilbert-serving:latest \
-  <account id>.dkr.ecr.us-east-1.amazonaws.com/distilbert-serving-ecr-repo:latest
-
-docker push \
-  <account id>.dkr.ecr.us-east-1.amazonaws.com/distilbert-serving-ecr-repo:latest
-
-kubectl apply -f k8s/
-
-kubectl get nodes
-
-kubectl get pods
-
-kubectl get service distilbert-service
-
-curl -X POST \
-  http://<elb url>.us-east-1.elb.amazonaws.com:8080/analyze \
-  -H "Content-Type: application/json" \
-  -d '{"text": "This movie was absolutely fantastic!"}
 ```
 
-## Teardown
-```bash
-# 1. Delete Kubernetes resources first (removes ELB)
-kubectl delete -f k8s/
+## 4. Deploy the Application
 
-# 2. Destroy infrastructure
+```bash
+kubectl apply -f deployment.yaml
+kubectl apply -f service.yaml
+```
+
+Check the external endpoint:
+
+```bash
+kubectl get service distilbert-service
+```
+
+Example request:
+
+```bash
+curl -X POST http://<elb-url>:8080/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"text": "This movie was absolutely fantastic!"}'
+```
+
+## 5. Run a Load Test
+
+```bash
+k6 run load_test.js
+```
+
+Main metrics to watch:
+- `http_req_duration`
+- `http_req_failed`
+- `http_reqs`
+
+## 6. Set Up Monitoring
+
+Install Prometheus and Grafana with Helm:
+
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  --namespace monitoring \
+  --create-namespace
+```
+
+Port-forward Grafana:
+
+```bash
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80
+```
+
+Get the Grafana admin password:
+
+```bash
+kubectl get secret -n monitoring kube-prometheus-stack-grafana \
+  -o jsonpath="{.data.admin-password}" | base64 --decode
+```
+
+## Cleanup
+
+Before running `terraform destroy`, delete the Kubernetes resources first:
+
+```bash
+kubectl delete -f service.yaml
+kubectl delete -f deployment.yaml
+```
+
+Then destroy the AWS infrastructure:
+
+```bash
 terraform destroy
 ```
-Skipping step 1 will cause VPC deletion to fail due to ELB dependency.
 
-## Change in Deployment for AWS
-### `deployment.yaml`
-Before:
-```yaml
-image: distilbert_api:latest
-imagePullPolicy: Never
-```
-
-After:
-```yaml
-image: <account id>.dkr.ecr.us-east-1.amazonaws.com/distilbert-serving-ecr-repo:latest
-imagePullPolicy: Always
-```
-
-When developing locally, we wanted the cluster to use the image built locally so we set `Never` for imagePullPolicy and used the image `distilbert_api:latest`. However, when working with AWS, we need to set imagePullPolicy `Always` because we want to use the image from AWS ECR and specified the image on ECR `<account id>.dkr.ecr.us-east-1.amazonaws.com/distilbert-serving-ecr-repo:latest`
-
-### `service.yaml`
-Before:
-```yaml
-type: NodePort
-```
-
-After:
-```yaml
-type: LoadBalancer
-```
-
-`NodePort` exposes worker node's IP and port to outside and in local development, we are able to use it in combination with the IP obtained by `minikube ip` command. However, with AWS, nodes could go down and the nodes' IPs are too unstable for production so with the use of `LoadBalancer`, we can tell AWS to create an elastic load balancer (ELB) and this adds additional layer in front of nodes so even if nodes go down and new nodes are assigned new IPs + ports, we can simply hit the ELB's URL which handles traffic for us under the hood.
-
-## Cost Warning
-This configuration incurs approximately **$4.60/day** in AWS charges (EKS cluster + NAT Gateway + EC2). Always run `terraform destroy` when the cluster is no longer needed.
-
-## Files
-| File | Description |
-|------|-------------|
-| `main.tf` | Provider and Terraform configuration |
-| `vpc.tf` | VPC, subnets, NAT Gateway, route tables |
-| `eks.tf` | EKS cluster and managed node group |
-| `iam.tf` | IAM roles and policy attachments |
-| `variables.tf` | Input variables |
-| `outputs.tf` | Cluster name, endpoint, and ARN |
-| `ecr.tf` | ECR and ECR policy |
+This matters because the `LoadBalancer` service creates AWS resources that can block VPC deletion if they still exist.
