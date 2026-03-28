@@ -1,0 +1,8 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+transformers==4.44.0
+onnx
+onnxruntime
+numpy<2
+torch==2.2.2
+fastapi
+uvicorn
