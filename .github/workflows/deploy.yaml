@@ -5,14 +5,36 @@ on: push
 jobs:
   job_1:
     runs-on: ubuntu-latest
+
     permissions:
       id-token: write
       contents: read
+
+    strategy:
+      matrix:
+        target: [pytorch, onnx]
+
     steps:
+      - name: Clone Repo
+        uses: actions/checkout@v4
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: us-east-1
+
       - name: Get Identity
         run: aws sts get-caller-identity
+
+      - name: ECR Login
+        run: aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ secrets.ECR_REPO_URL }}
+
+      - name: Build Image
+        run: docker build -t distilbert-serving:${{ matrix.target }} ./${{ matrix.target }}
+
+      - name: Tag Image
+        run: docker tag distilbert-serving:${{ matrix.target }} ${{ secrets.ECR_REPO_URL }}:${{ matrix.target }}
+
+      - name: Push Image
+        run: docker push ${{ secrets.ECR_REPO_URL }}:${{ matrix.target }}
