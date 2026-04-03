@@ -4,3 +4,5 @@ terraform.tfstate.backup
 .terraform.tfstate.lock.info
 *.tfvars
 .DS_Store
+__pycache__/
+*.onnx
