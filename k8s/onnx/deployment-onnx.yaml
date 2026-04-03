@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: distilbert-onnx-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: distilbert-onnx-app
+  template:
+    metadata:
+      labels:
+        app: distilbert-onnx-app
+    spec:
+      containers:
+        - name: distilbert-onnx-app-containers
+          image: <account-id>.dkr.ecr.us-east-1.amazonaws.com/distilbert-serving-ecr-repo:onnx
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+            requests:
+              memory: "1Gi"
+              cpu: "50m"
