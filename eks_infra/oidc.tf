@@ -60,3 +60,19 @@ resource "aws_eks_access_policy_association" "github_actions" {
   }
   depends_on = [aws_eks_access_entry.github_actions]
 }
+
+resource "aws_iam_role_policy" "github_actions_eks_policy" {
+  name = "eks-describe-cluster"
+  role = aws_iam_role.github_actions_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["eks:DescribeCluster"]
+        Resource = "arn:aws:eks:us-east-1:891376949363:cluster/distilbert-serving-eks-cluster"
+      }
+    ]
+  })
+}
