@@ -43,7 +43,9 @@ jobs:
         run: aws eks update-kubeconfig --region us-east-1 --name distilbert-serving-eks-cluster
 
       - name: Replace IMAGE_NAME Placeholder
-        run: sed -i 's|IMAGE_NAME|${{ secrets.ECR_REPO_URL }}:${{ matrix.target }}-${{ github.sha }}|g' k8s/${{ matrix.target }}/deployment-${{ matrix.target }}.yaml
+        env:
+          IMAGE: ${{ secrets.ECR_REPO_URL }}:${{ matrix.target }}-${{ github.sha }}
+        run: sed -i 's|IMAGE_NAME|'"$IMAGE"'|g' k8s/${{ matrix.target }}/deployment-${{ matrix.target }}.yaml
 
       - name: EKS Apply
         run: kubectl apply -f ./k8s/${{ matrix.target }}
