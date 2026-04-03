@@ -14,6 +14,9 @@ jobs:
       matrix:
         target: [pytorch, onnx]
 
+    env:
+      IMAGE_TAG: ${{ matrix.target }}-${{ github.sha }}
+
     steps:
       - name: Clone Repo
         uses: actions/checkout@v4
@@ -31,13 +34,13 @@ jobs:
         run: aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ secrets.ECR_REPO_URL }}
 
       - name: Build Image
-        run: docker build -t distilbert-serving:${{ matrix.target }}-${{ github.sha }} ./${{ matrix.target }}
+        run: docker build -t distilbert-serving:$IMAGE_TAG ./${{ matrix.target }}
 
       - name: Tag Image
-        run: docker tag distilbert-serving:${{ matrix.target }-${{ github.sha }} ${{ secrets.ECR_REPO_URL }}:${{ matrix.target }}-${{ github.sha }}
+        run: docker tag distilbert-serving:$IMAGE_TAG ${{ secrets.ECR_REPO_URL }}:$IMAGE_TAG
 
       - name: Push Image
-        run: docker push ${{ secrets.ECR_REPO_URL }}:${{ matrix.target }}-${{ github.sha }}
+        run: docker push ${{ secrets.ECR_REPO_URL }}:$IMAGE_TAG
 
       - name: Connect EKS to Kubectl
         run: aws eks update-kubeconfig --region us-east-1 --name distilbert-serving-eks-cluster
