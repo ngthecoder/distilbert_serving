@@ -31,10 +31,19 @@ jobs:
         run: aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ secrets.ECR_REPO_URL }}
 
       - name: Build Image
-        run: docker build -t distilbert-serving:${{ matrix.target }} ./${{ matrix.target }}
+        run: docker build -t distilbert-serving:${{ matrix.target }}-${{ github.sha }} ./${{ matrix.target }}
 
       - name: Tag Image
-        run: docker tag distilbert-serving:${{ matrix.target }} ${{ secrets.ECR_REPO_URL }}:${{ matrix.target }}
+        run: docker tag distilbert-serving:${{ matrix.target }-${{ github.sha }} ${{ secrets.ECR_REPO_URL }}:${{ matrix.target }}-${{ github.sha }}
 
       - name: Push Image
-        run: docker push ${{ secrets.ECR_REPO_URL }}:${{ matrix.target }}
+        run: docker push ${{ secrets.ECR_REPO_URL }}:${{ matrix.target }}-${{ github.sha }}
+
+      - name: Connect EKS to Kubectl
+        run: aws eks update-kubeconfig --region us-east-1 --name distilbert-serving-eks-cluster
+
+      - name: Replace IMAGE_NAME Placeholder
+        run: sed -i 's|IMAGE_NAME|${{ secrets.ECR_REPO_URL }}:${{ matrix.target }}-${{ github.sha }}|g' k8s/${{ matrix.target }}/deployment-${{ matrix.target }}.yaml
+
+      - name: EKS Apply
+        run: kubectl apply -f ./k8s/${{ matrix.target }}
