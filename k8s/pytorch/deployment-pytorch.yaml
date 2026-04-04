@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: distilbert-pytorch-app-containers
-          image: <account-id>.dkr.ecr.us-east-1.amazonaws.com/distilbert-serving-ecr-repo:pytorch
+          image: IMAGE_NAME
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
