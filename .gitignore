@@ -6,3 +6,4 @@ terraform.tfstate.backup
 .DS_Store
 __pycache__/
 *.onnx
+blog_materials/
